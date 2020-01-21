@@ -1,73 +1,88 @@
-import { Types, PluginFunction } from '@graphql-codegen/plugin-helpers';
-import { parse, printSchema, visit, GraphQLSchema, TypeInfo, GraphQLNamedType, visitWithTypeInfo, getNamedType, isIntrospectionType, DocumentNode, printIntrospectionSchema, isObjectType } from 'graphql';
-import { TsVisitor } from './visitor';
-import { TsIntrospectionVisitor } from './introspection-visitor';
-import { TypeScriptPluginConfig } from './config';
+import { parse, GraphQLSchema, printSchema, visit } from 'graphql';
+import { PluginFunction, Types } from '@graphql-codegen/plugin-helpers';
+import { RawConfig, EnumValuesMap } from '@graphql-codegen/visitor-plugin-common';
+import { CSharpResolversVisitor } from './visitor';
+import { buildPackageNameFromPath } from './csharp-common';
+import { dirname, normalize } from 'path';
 
-export * from './typescript-variables-to-object';
-export * from './visitor';
-export * from './types';
-export * from './config';
-export * from './introspection-visitor';
+export interface CSharpResolversPluginRawConfig extends RawConfig {
+  /**
+   * @name package
+   * @type string
+   * @description Customize the CSharp package name. The default package name will be generated according to the output file path.
+   *
+   * @example
+   * ```yml
+   * generates:
+   *   src/main/csharp/my-org/my-app/Resolvers.cs:
+   *     plugins:
+   *       - csharp
+   *     config:
+   *       package: custom.package.name
+   * ```
+   */
+  package?: string;
+  /**
+   * @name enumValues
+   * @type EnumValuesMap
+   * @description Overrides the default value of enum values declared in your GraphQL schema.
+   *
+   * @example With Custom Values
+   * ```yml
+   *   config:
+   *     enumValues:
+   *       MyEnum:
+   *         A: 'foo'
+   * ```
+   */
+  enumValues?: EnumValuesMap;
+  /**
+   * @name className
+   * @type string
+   * @default Types
+   * @description Allow you to customize the parent class name.
+   *
+   * @example
+   * ```yml
+   * generates:
+   *   src/main/csharp/my-org/my-app/MyGeneratedTypes.cs:
+   *     plugins:
+   *       - csharp
+   *     config:
+   *       className: MyGeneratedTypes
+   * ```
+   */
+  className?: string;
+  /**
+   * @name listType
+   * @type string
+   * @default Iterable
+   * @description Allow you to customize the list type
+   *
+   * @example
+   * ```yml
+   * generates:
+   *   src/main/csharp/my-org/my-app/Types.cs:
+   *     plugins:
+   *       - csharp
+   *     config:
+   *       listType: Map
+   * ```
+   */
+  listType?: string;
+}
 
-export const plugin: PluginFunction<TypeScriptPluginConfig> = (schema: GraphQLSchema, documents: Types.DocumentFile[], config: TypeScriptPluginConfig) => {
-  const visitor = new TsVisitor(schema, config);
+export const plugin: PluginFunction<CSharpResolversPluginRawConfig> = async (schema: GraphQLSchema, documents: Types.DocumentFile[], config: CSharpResolversPluginRawConfig, { outputFile }): Promise<string> => {
+  const relevantPath = dirname(normalize(outputFile));
+  const defaultPackageName = buildPackageNameFromPath(relevantPath);
+  const visitor = new CSharpResolversVisitor(config, schema, defaultPackageName);
   const printedSchema = printSchema(schema);
   const astNode = parse(printedSchema);
-  const maybeValue = visitor.getMaybeValue();
-  const visitorResult = visit(astNode, { leave: visitor });
-  const introspectionDefinitions = includeIntrospectionDefinitions(schema, documents, config);
-  const scalars = visitor.scalarsDefinition;
+  const visitorResult = visit(astNode, { leave: visitor as any });
+  const imports = visitor.getImports();
+  const packageName = visitor.getPackageName();
+  const blockContent = visitorResult.definitions.filter(d => typeof d === 'string').join('\n');
+  const wrappedContent = visitor.wrapWithClass(blockContent);
 
-  return {
-    prepend: [...visitor.getEnumsImports(), ...visitor.getScalarsImports(), maybeValue],
-    content: [scalars, ...visitorResult.definitions, ...introspectionDefinitions].join('\n'),
-  };
+  return [packageName, imports, wrappedContent].join('\n');
 };
-
-export function includeIntrospectionDefinitions(schema: GraphQLSchema, documents: Types.DocumentFile[], config: TypeScriptPluginConfig): string[] {
-  const typeInfo = new TypeInfo(schema);
-  const usedTypes: GraphQLNamedType[] = [];
-  const documentsVisitor = visitWithTypeInfo(typeInfo, {
-    Field() {
-      const type = getNamedType(typeInfo.getType());
-
-      if (isIntrospectionType(type) && !usedTypes.includes(type)) {
-        usedTypes.push(type);
-      }
-    },
-  });
-
-  documents.forEach(doc => visit(doc.content, documentsVisitor));
-
-  const typesToInclude: GraphQLNamedType[] = [];
-
-  usedTypes.forEach(type => {
-    collectTypes(type);
-  });
-
-  const visitor = new TsIntrospectionVisitor(schema, config, typesToInclude);
-  const result: DocumentNode = visit(parse(printIntrospectionSchema(schema)), { leave: visitor });
-
-  // recursively go through each `usedTypes` and their children and collect all used types
-  // we don't care about Interfaces, Unions and others, but Objects and Enums
-  function collectTypes(type: GraphQLNamedType): void {
-    if (typesToInclude.includes(type)) {
-      return;
-    }
-
-    typesToInclude.push(type);
-
-    if (isObjectType(type)) {
-      const fields = type.getFields();
-
-      Object.keys(fields).forEach(key => {
-        const field = fields[key];
-        const type = getNamedType(field.type);
-        collectTypes(type);
-      });
-    }
-  }
-
-  return result.definitions as any[];
-}

@@ -1,6 +1,6 @@
 {
   "name": "@derekjwilliams/graphqlgen-dotnet-hotchocolate",
-  "version": "1.11.3",
+  "version": "1.11.9",
   "description": "GraphQL Code Generator plugin for generating types for hot chocloate",
   "repository": "https://github.com/derekjwilliams/codegen-dotnet-hotchocolate.git",
   "license": "MIT",
@@ -12,7 +12,6 @@
   "dependencies": {
     "@graphql-codegen/plugin-helpers": "1.11.2",
     "@graphql-codegen/visitor-plugin-common": "1.11.2",
-    "auto-bind": "4.0.0",
     "tslib": "1.10.0"
   },
   "devDependencies": {
@@ -22,9 +21,6 @@
     "jest": "24.9.0",
     "ts-jest": "24.3.0",
     "typescript": "3.7.5"
-  },
-  "peerDependencies": {
-    "graphql": "^0.12.0 || ^0.13.0 || ^14.0.0"
   },
   "sideEffects": false,
   "main": "dist/index.cjs.js",
