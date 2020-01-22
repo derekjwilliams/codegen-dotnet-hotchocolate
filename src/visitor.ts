@@ -18,7 +18,7 @@ import {
 import { CSHARP_SCALARS, CSharpDeclarationBlock, wrapTypeWithModifiers } from './csharp-common';
 
 export interface CSharpResolverParsedConfig extends ParsedConfig {
-  package: string;
+  namespace: string;
   className: string;
   listType: string;
   enumValues: EnumValuesMap;
@@ -29,33 +29,26 @@ export class CSharpResolversVisitor extends BaseVisitor<CSharpResolversPluginRaw
   private _addMapImport = false;
   private _addListImport = false;
 
-  constructor(rawConfig: CSharpResolversPluginRawConfig, private _schema: GraphQLSchema, defaultPackageName: string) {
+  constructor(rawConfig: CSharpResolversPluginRawConfig, private _schema: GraphQLSchema, defaultNamespace: string) {
     super(rawConfig, {
       enumValues: rawConfig.enumValues || {},
       listType: rawConfig.listType || 'Iterable',
       className: rawConfig.className || 'Types',
-      package: rawConfig.package || defaultPackageName,
+      namespace: rawConfig.namespace || defaultNamespace,
       scalars: buildScalars(_schema, rawConfig.scalars, CSHARP_SCALARS),
     });
   }
 
-  public getImports(): string {
-    const allImports = [];
-
-    if (this._addHashMapImport) {
-      allImports.push(`java.util.HashMap`);
-    }
-
-    if (this._addMapImport) {
-      allImports.push(`java.util.Map`);
-    }
-
-    if (this._addListImport) {
-      allImports.push(`java.util.List`);
-      allImports.push(`java.util.stream.Collectors`);
-    }
-
-    return allImports.map(i => `import ${i};`).join('\n') + '\n';
+  public getUsings(): string {
+    return 'using ' + ['DotNetConf2019.GraphQL.Data',
+    'HotChocolate',
+    'HotChocolate.Resolvers',
+    'HotChocolate.Types',
+    'Markdig',
+    'Microsoft.EntityFrameworkCore',
+    'System.Collections.Generic',
+    'System.Linq',
+    'System.Threading.Tasks'].map(i => `using ${i};`).join('\n') + '\n';
   }
 
   public wrapWithClass(content: string): string {
@@ -66,8 +59,8 @@ export class CSharpResolversVisitor extends BaseVisitor<CSharpResolversPluginRaw
       .withBlock(indentMultiline(content)).string;
   }
 
-  public getPackageName(): string {
-    return `package ${this.config.package};\n`;
+  public getNamespace(): string {
+    return `namespace ${this.config.namespace};\n`;
   }
 
   protected getEnumValue(enumName: string, enumOption: string): string {

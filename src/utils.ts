@@ -1,6 +1,6 @@
 import { Kind, TypeNode } from 'graphql';
 
-export function buildPackageNameFromPath(path: string): string {
+export function buildNamespaceFromPath(path: string): string {
   const unixify = require('unixify');
   return unixify(path || '')
     .replace(/src\/main\/.*?\//, '')

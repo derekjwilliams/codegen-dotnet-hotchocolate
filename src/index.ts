@@ -2,14 +2,14 @@ import { parse, GraphQLSchema, printSchema, visit } from 'graphql';
 import { PluginFunction, Types } from '@graphql-codegen/plugin-helpers';
 import { RawConfig, EnumValuesMap } from '@graphql-codegen/visitor-plugin-common';
 import { CSharpResolversVisitor } from './visitor';
-import { buildPackageNameFromPath } from './csharp-common';
+import { buildNamespaceFromPath } from './csharp-common';
 import { dirname, normalize } from 'path';
 
 export interface CSharpResolversPluginRawConfig extends RawConfig {
   /**
-   * @name package
+   * @name namespace
    * @type string
-   * @description Customize the CSharp package name. The default package name will be generated according to the output file path.
+   * @description Customize the CSharp namespace. The default namespace will be generated according to the output file path.
    *
    * @example
    * ```yml
@@ -21,7 +21,7 @@ export interface CSharpResolversPluginRawConfig extends RawConfig {
    *       package: custom.package.name
    * ```
    */
-  package?: string;
+  namespace?: string;
   /**
    * @name enumValues
    * @type EnumValuesMap
@@ -74,13 +74,13 @@ export interface CSharpResolversPluginRawConfig extends RawConfig {
 
 export const plugin: PluginFunction<CSharpResolversPluginRawConfig> = async (schema: GraphQLSchema, documents: Types.DocumentFile[], config: CSharpResolversPluginRawConfig, { outputFile }): Promise<string> => {
   const relevantPath = dirname(normalize(outputFile));
-  const defaultPackageName = buildPackageNameFromPath(relevantPath);
-  const visitor = new CSharpResolversVisitor(config, schema, defaultPackageName);
+  const defaultNamespace = buildNamespaceFromPath(relevantPath);
+  const visitor = new CSharpResolversVisitor(config, schema, defaultNamespace);
   const printedSchema = printSchema(schema);
   const astNode = parse(printedSchema);
   const visitorResult = visit(astNode, { leave: visitor as any });
-  const imports = visitor.getImports();
-  const packageName = visitor.getPackageName();
+  const imports = visitor.getUsings();
+  const packageName = visitor.getNamespace();
   const blockContent = visitorResult.definitions.filter(d => typeof d === 'string').join('\n');
   const wrappedContent = visitor.wrapWithClass(blockContent);
 
